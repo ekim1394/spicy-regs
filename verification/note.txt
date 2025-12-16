@@ -1,0 +1,1 @@
+Skipping screenshot as authentication blocks access.
