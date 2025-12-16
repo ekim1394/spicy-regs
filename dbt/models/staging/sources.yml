@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: mirrulations
+    description: "Raw data from regulations.gov"
+    tables:
+      - name: dockets
+        description: "Raw dockets JSON data"
+        meta:
+          external_location: "read_json_auto('../sample-data/mirrulations/docket-*.json')"
