@@ -18,7 +18,9 @@ interface DataViewerProps {
 const PAGE_SIZE = 20;
 
 export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) {
-  const [data, setData] = useState<RegulationData[]>([]);
+  // Store data in a Map to handle deduplication efficiently during updates
+  // avoiding O(N^2) behavior when appending new pages
+  const [dataMap, setDataMap] = useState<Map<string, RegulationData>>(new Map());
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -91,7 +93,7 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
 
   // Reset data when filters change
   useEffect(() => {
-    setData([]);
+    setDataMap(new Map());
     setOffset(0);
     setTotalCount(0);
   }, [agencyCode, dataType, docketId]);
@@ -99,7 +101,7 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
   // Initial load and load more
   useEffect(() => {
     if (!agencyCode || !docketId) {
-      setData([]);
+      setDataMap(new Map());
       return;
     }
 
@@ -135,15 +137,36 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
           offset
         );
         
-        if (isInitialLoad) {
-          setData(result);
-        } else {
-          setData(prev => [...prev, ...result]);
-        }
+        // Merge new results into the existing map
+        setDataMap(prevMap => {
+          // If initial load, start fresh, otherwise copy previous map
+          const newMap = isInitialLoad ? new Map<string, RegulationData>() : new Map(prevMap);
+
+          result.forEach(item => {
+            const key = dataType === 'comments'
+              ? (stripQuotes(item.comment_id) || item.docket_id)
+              : item.docket_id;
+
+            if (!key) return;
+
+            const existing = newMap.get(key);
+            if (!existing) {
+              newMap.set(key, item);
+            } else {
+              const existingDate = existing.cached_at || existing.modify_date || '';
+              const currentDate = item.cached_at || item.modify_date || '';
+              if (currentDate > existingDate) {
+                newMap.set(key, item);
+              }
+            }
+          });
+          return newMap;
+        });
+
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data');
         if (offset === 0) {
-          setData([]);
+          setDataMap(new Map());
         }
       } finally {
         setLoading(false);
@@ -154,32 +177,16 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
   }, [agencyCode, dataType, docketId, getData, getDataCount, offset]);
 
   const loadMore = useCallback(() => {
-    if (!loadingMore && data.length < totalCount) {
+    // Check against offset instead of data length since offset tracks raw items fetched
+    if (!loadingMore && offset < totalCount) {
       setOffset(prev => prev + PAGE_SIZE);
     }
-  }, [loadingMore, data.length, totalCount]);
+  }, [loadingMore, offset, totalCount]);
 
-  // Deduplicate based on data type
+  // Memoize the array conversion
   const uniqueData = useMemo(() => {
-    const dataMap = new Map<string, RegulationData>();
-    data.forEach(item => {
-      const key = dataType === 'comments' 
-        ? (stripQuotes(item.comment_id) || item.docket_id)
-        : item.docket_id;
-      
-      const existing = dataMap.get(key);
-      if (!existing) {
-        dataMap.set(key, item);
-      } else {
-        const existingDate = existing.cached_at || existing.modify_date || '';
-        const currentDate = item.cached_at || item.modify_date || '';
-        if (currentDate > existingDate) {
-          dataMap.set(key, item);
-        }
-      }
-    });
     return Array.from(dataMap.values());
-  }, [data, dataType]);
+  }, [dataMap]);
 
   if (!agencyCode) {
     return (
@@ -192,7 +199,7 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
   if (!docketId) {
     return (
       <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-        Select a docket to view data (or select "All Dockets")
+        Select a docket to view data (or select &quot;All Dockets&quot;)
       </div>
     );
   }
