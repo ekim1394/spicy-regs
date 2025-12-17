@@ -13,11 +13,11 @@ async function refreshCache(
   }
 
   const tableName = `${dataType}_cache`;
-  const whereClause = buildWhereClause(agencyCode, docketId);
+  const { clause: whereClause, params: whereParams } = buildWhereClause(agencyCode, docketId);
 
   console.log(`Refreshing ${dataType} cache for agency code: ${agencyCode}, docket id: ${docketId}`);
 
-  await runQuery(`DELETE FROM ${tableName} WHERE ${whereClause}`);
+  await runQuery(`DELETE FROM ${tableName} WHERE ${whereClause}`, whereParams);
 
   const query = buildBaseQuery(dataType, agencyCode, docketId);
   const countResult = await runQuery<{ count: number }>(`SELECT COUNT(*) as count FROM (${query}) q`);
@@ -50,7 +50,7 @@ export async function getData(
   await initializeDatabase(); 
 
   const tableName = `${dataType}_cache`;
-  const whereClause = buildWhereClause(agencyCode, docketId);
+  const { clause: whereClause, params: whereParams } = buildWhereClause(agencyCode, docketId);
   const cacheAgeResult = await runQuery(`
     SELECT 
         COUNT(*) as count,
@@ -58,7 +58,7 @@ export async function getData(
         EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MAX(cached_at)))/3600 as age_hours
     FROM ${tableName} 
     WHERE ${whereClause}
-  `);
+  `, whereParams);
 
   const row = cacheAgeResult[0];
   const count = Number(Object.values(row)[0]);
@@ -67,20 +67,28 @@ export async function getData(
   if (count > 0 && ageHours !== null && ageHours < maxCacheAgeHours) {
     console.log("Using cached data");
     const query = `SELECT * FROM ${tableName} WHERE ${whereClause}`;
-    return runQuery(query);
+    return runQuery(query, whereParams);
   } else {
     try {
         await refreshCache(agencyCode, docketId, dataType);
         const query = `SELECT * FROM ${tableName} WHERE ${whereClause}`;
-        return runQuery(query);
+        return runQuery(query, whereParams);
     } catch (e) {
         console.error("Error refreshing cache, falling back to live query", e);
         let query = buildBaseQuery(dataType, agencyCode, docketId);
+
+        // This fallback query logic needs attention if we want to be strictly secure,
+        // but buildBaseQuery constructs paths, which is harder to parameterize in the FROM clause.
+        // The where clause part can be parameterized.
+
+        let params: any[] = [];
         if (agencyCode || docketId) {
-             const wc = buildWhereClause(agencyCode, docketId).replace(/agency_code/g, 'f.agency_code').replace(/docket_id/g, 'f.docket_id');
+             const wcObj = buildWhereClause(agencyCode, docketId);
+             const wc = wcObj.clause.replace(/agency_code/g, 'f.agency_code').replace(/docket_id/g, 'f.docket_id');
              query += ` WHERE ${wc}`;
+             params = wcObj.params;
         }
-        return runQuery(query);
+        return runQuery(query, params);
     }
   }
 }
@@ -90,12 +98,14 @@ export async function searchResources(query: string, agencyCode?: string): Promi
   await initializeDatabase();
   
   const tables = ['dockets_cache', 'documents_cache', 'comments_cache'];
-  const results = [];
-  const escapedQuery = query.replace(/'/g, "''");
+  const params: any[] = [];
   const unionQueries = tables.map(table => {
-    let where = `title ILIKE '%${escapedQuery}%'`;
+    let where = `title ILIKE ?`;
+    params.push(`%${query}%`);
+
     if (agencyCode) {
-        where += ` AND agency_code = '${agencyCode}'`;
+        where += ` AND agency_code = ?`;
+        params.push(agencyCode);
     }
     const type = table.split('_')[0];
     return `
@@ -114,7 +124,7 @@ export async function searchResources(query: string, agencyCode?: string): Promi
   const fullQuery = unionQueries.join(" UNION ALL ") + " LIMIT 50";
   
   try {
-     return await runQuery(fullQuery);
+     return await runQuery(fullQuery, params);
   } catch (e) {
      console.error("Search query failed", e);
      return [];

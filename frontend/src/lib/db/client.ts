@@ -70,14 +70,25 @@ export async function getDb(): Promise<AsyncDuckDB> {
   return dbInstance;
 }
 
-export async function runQuery<T = any>(sql: string): Promise<T[]> {
+export async function runQuery<T = any>(sql: string, params: any[] = []): Promise<T[]> {
   const db = await getDb();
   
   if (!connInstance) {
      connInstance = await db.connect();
   }
   
-  const result = await connInstance.query(sql);
+  let result;
+  if (params.length > 0) {
+    const stmt = await connInstance.prepare(sql);
+    try {
+      result = await stmt.query(...params);
+    } finally {
+      await stmt.close();
+    }
+  } else {
+    result = await connInstance.query(sql);
+  }
+
   const rows = result.toArray().map((row: any) => row.toJSON());
   
   return rows as T[];
