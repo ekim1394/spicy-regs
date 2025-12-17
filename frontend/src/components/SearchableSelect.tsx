@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, forwardRef } from 'react';
+import { Virtuoso } from 'react-virtuoso';
 
 interface SearchableSelectProps {
   options: string[];
@@ -25,18 +26,33 @@ export function SearchableSelect({
   const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Filter options based on search term
-  const filteredOptions = options.filter((option) =>
-    option.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Memoize processed options to avoid creating new strings on every render
+  const processedOptions = useMemo(() => {
+    return options.map(opt => ({ original: opt, lower: opt.toLowerCase() }));
+  }, [options]);
 
-  // Update effect to sync search term when value changes externally (or initial load)
+  // Filter options based on search term
+  const filteredOptions = useMemo(() => {
+    const lowerSearch = searchTerm.toLowerCase();
+    return processedOptions
+      .filter(opt => opt.lower.includes(lowerSearch))
+      .map(opt => opt.original);
+  }, [processedOptions, searchTerm]);
+
+  // Sync search term when value changes
   useEffect(() => {
-    if (value) {
+    if (value && value !== searchTerm) {
       setSearchTerm(value);
-    } else {
+    } else if (!value && searchTerm !== '') {
+      // Only clear if value is null but search term has something (and we are not typing?)
+      // Actually, if value is null, we should probably clear search term unless user is typing.
+      // But we can't easily distinguish "user typing" from "parent set null".
+      // Given the usage, `value` usually drives the input when selected.
       setSearchTerm('');
     }
+    // We only want to run this when `value` changes, not `searchTerm`.
+    // But we need `searchTerm` in the condition.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   // Handle click outside to close dropdown
@@ -86,7 +102,6 @@ export function SearchableSelect({
           onChange={(e) => {
             setSearchTerm(e.target.value);
             if (!isOpen) setIsOpen(true);
-            // Optional: if user clears input, clear selection?
             if (e.target.value === '') {
                  onChange(null);
             }
@@ -117,21 +132,26 @@ export function SearchableSelect({
 
         {/* Dropdown */}
         {isOpen && !disabled && (
-          <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg">
             {filteredOptions.length > 0 ? (
-              <ul className="py-1">
-                {filteredOptions.map((option) => (
-                  <li
-                    key={option}
-                    className={`px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                      value === option ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'
-                    }`}
-                    onClick={() => handleSelect(option)}
-                  >
-                    {option}
-                  </li>
-                ))}
-              </ul>
+               <Virtuoso
+                  style={{ height: `${Math.min(filteredOptions.length * 40, 240)}px` }}
+                  data={filteredOptions}
+                  components={{
+                    List: VirtuosoList,
+                    Item: VirtuosoItem,
+                  }}
+                  itemContent={(index, option) => (
+                    <div
+                      className={`px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                        value === option ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100'
+                      }`}
+                      onClick={() => handleSelect(option)}
+                    >
+                      {option}
+                    </div>
+                  )}
+                />
             ) : (
               <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
                 No results found
@@ -143,3 +163,14 @@ export function SearchableSelect({
     </div>
   );
 }
+
+// Extract components to avoid re-creation and fix lint/display name issues
+const VirtuosoList = forwardRef<HTMLUListElement, React.HTMLAttributes<HTMLUListElement>>((props, ref) => (
+  <ul {...props} ref={ref} className="py-1" />
+));
+VirtuosoList.displayName = 'VirtuosoList';
+
+const VirtuosoItem = forwardRef<HTMLLIElement, React.HTMLAttributes<HTMLLIElement>>((props, ref) => (
+  <li {...props} ref={ref} />
+));
+VirtuosoItem.displayName = 'VirtuosoItem';
