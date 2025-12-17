@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: mirrulations
+    schema: main
+    tables:
+      - name: dockets
+        description: "Raw dockets JSON data from Mirrulations"
+        meta:
+          external_location: "../sample-data/mirrulations/docket-*.json"

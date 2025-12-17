@@ -7,3 +7,7 @@ __marimo__
 .langgraph_api
 .vercel
 .agent
+dbt/dbt_packages/
+dbt/target/
+dbt/logs/
+*.duckdb
