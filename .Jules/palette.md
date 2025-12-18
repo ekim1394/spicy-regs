@@ -1,0 +1,3 @@
+## 2024-05-23 - Custom Combobox Accessibility
+**Learning:** Custom select/combobox components (like `SearchableSelect`) require careful implementation of ARIA roles (`combobox`, `listbox`, `option`) and keyboard event handling (`ArrowDown`, `ArrowUp`, `Enter`, `Escape`) to be accessible. Simply adding `onClick` is insufficient. The "state during render" pattern is preferred over `useEffect` for syncing props to state to avoid "cascading render" lint errors.
+**Action:** When implementing custom interactive components, start with the ARIA Authoring Practices Guide (APG) patterns and include keyboard navigation from the start. Use the `prevValue` state pattern for prop synchronization.
