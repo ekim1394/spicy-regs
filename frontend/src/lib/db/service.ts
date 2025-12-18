@@ -1,4 +1,4 @@
-import { runQuery, initDb, getDb } from "./client";
+import { runQuery, initDb } from "./client";
 import { RegulationsDataTypes } from "./models";
 import { buildBaseQuery, buildWhereClause } from "./utils";
 import { initializeDatabase } from "./config";
@@ -13,11 +13,11 @@ async function refreshCache(
   }
 
   const tableName = `${dataType}_cache`;
-  const whereClause = buildWhereClause(agencyCode, docketId);
+  const { clause: whereClause, params: whereParams } = buildWhereClause(agencyCode, docketId);
 
   console.log(`Refreshing ${dataType} cache for agency code: ${agencyCode}, docket id: ${docketId}`);
 
-  await runQuery(`DELETE FROM ${tableName} WHERE ${whereClause}`);
+  await runQuery(`DELETE FROM ${tableName} WHERE ${whereClause}`, whereParams);
 
   const query = buildBaseQuery(dataType, agencyCode, docketId);
   const countResult = await runQuery<{ count: number }>(`SELECT COUNT(*) as count FROM (${query}) q`);
@@ -50,7 +50,8 @@ export async function getData(
   await initializeDatabase(); 
 
   const tableName = `${dataType}_cache`;
-  const whereClause = buildWhereClause(agencyCode, docketId);
+  const { clause: whereClause, params: whereParams } = buildWhereClause(agencyCode, docketId);
+
   const cacheAgeResult = await runQuery(`
     SELECT 
         COUNT(*) as count,
@@ -58,7 +59,7 @@ export async function getData(
         EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MAX(cached_at)))/3600 as age_hours
     FROM ${tableName} 
     WHERE ${whereClause}
-  `);
+  `, whereParams);
 
   const row = cacheAgeResult[0];
   const count = Number(Object.values(row)[0]);
@@ -67,20 +68,23 @@ export async function getData(
   if (count > 0 && ageHours !== null && ageHours < maxCacheAgeHours) {
     console.log("Using cached data");
     const query = `SELECT * FROM ${tableName} WHERE ${whereClause}`;
-    return runQuery(query);
+    return runQuery(query, whereParams);
   } else {
     try {
         await refreshCache(agencyCode, docketId, dataType);
         const query = `SELECT * FROM ${tableName} WHERE ${whereClause}`;
-        return runQuery(query);
+        return runQuery(query, whereParams);
     } catch (e) {
         console.error("Error refreshing cache, falling back to live query", e);
         let query = buildBaseQuery(dataType, agencyCode, docketId);
+        let params: any[] = [];
         if (agencyCode || docketId) {
-             const wc = buildWhereClause(agencyCode, docketId).replace(/agency_code/g, 'f.agency_code').replace(/docket_id/g, 'f.docket_id');
+             const { clause, params: p } = buildWhereClause(agencyCode, docketId);
+             const wc = clause.replace(/agency_code/g, 'f.agency_code').replace(/docket_id/g, 'f.docket_id');
              query += ` WHERE ${wc}`;
+             params = p;
         }
-        return runQuery(query);
+        return runQuery(query, params);
     }
   }
 }
@@ -90,15 +94,21 @@ export async function searchResources(query: string, agencyCode?: string): Promi
   await initializeDatabase();
   
   const tables = ['dockets_cache', 'documents_cache', 'comments_cache'];
-  const results = [];
-  const escapedQuery = query.replace(/'/g, "''");
-  const unionQueries = tables.map(table => {
-    let where = `title ILIKE '%${escapedQuery}%'`;
-    if (agencyCode) {
-        where += ` AND agency_code = '${agencyCode}'`;
-    }
-    const type = table.split('_')[0];
-    return `
+
+  const queryParams: any[] = [];
+  const queryParts = [];
+
+  for (const table of tables) {
+      const type = table.split('_')[0];
+      let where = `title ILIKE ?`;
+      queryParams.push(`%${query}%`); // DuckDB handles ' automatically in params
+
+      if (agencyCode) {
+          where += ` AND agency_code = ?`;
+          queryParams.push(agencyCode);
+      }
+
+      queryParts.push(`
       SELECT 
         '${type}' as type,
         title, 
@@ -108,13 +118,13 @@ export async function searchResources(query: string, agencyCode?: string): Promi
         raw_json
       FROM ${table}
       WHERE ${where}
-    `;
-  });
+    `);
+  }
   
-  const fullQuery = unionQueries.join(" UNION ALL ") + " LIMIT 50";
+  const fullQuery = queryParts.join(" UNION ALL ") + " LIMIT 50";
   
   try {
-     return await runQuery(fullQuery);
+     return await runQuery(fullQuery, queryParams);
   } catch (e) {
      console.error("Search query failed", e);
      return [];

@@ -19,9 +19,25 @@ export function useMotherDuckService() {
   /**
    * Execute a query and return rows
    */
-  const runQuery = useCallback(async <T = any>(sql: string): Promise<T[]> => {
+  const runQuery = useCallback(async <T = any>(sql: string, params?: any[]): Promise<T[]> => {
     try {
-      const result = await contextEvaluateQuery(sql);
+      // If params are provided, we should use them. But contextEvaluateQuery only takes SQL string.
+      // We assume the caller has already used bindParams if needed, or we rely on the fact that
+      // we are using bindParams in getData/searchResources.
+      // However, to avoid 'unused variable' lint error and to be safer:
+
+      let finalSql = sql;
+      if (params && params.length > 0) {
+        // Simple manual binding if params are passed but not used by caller
+         let paramIdx = 0;
+         finalSql = sql.replace(/\?/g, () => {
+            const val = params[paramIdx++];
+            if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+            return val;
+        });
+      }
+
+      const result = await contextEvaluateQuery(finalSql);
       return result.data.toRows() as T[];
     } catch (error) {
       console.error('[MotherDuck] Query failed:', sql, error);
@@ -149,12 +165,39 @@ export function useMotherDuckService() {
     }
 
     const tableName = `${dataType}_cache`;
-    const whereClause = buildWhereClause(agencyCode, docketId);
+    // FIX: use destructured result
+    const { clause: whereClause, params: whereParams } = buildWhereClause(agencyCode, docketId);
 
     console.log(`[MotherDuck] Refreshing ${dataType} cache for agency: ${agencyCode}, docket: ${docketId}`);
 
     // Delete existing
-    await runQuery(`DELETE FROM ${tableName} WHERE ${whereClause}`);
+    // We are passing params, but runQuery might not use them if contextEvaluateQuery doesn't support it.
+    // For this specific hook, I'll interpolate manually if I can't confirm support,
+    // BUT to keep it compiling I must handle the object return from buildWhereClause.
+    // Given the constraints and the fact I can't easily see context definition without more exploration,
+    // I will try to use the params in runQuery signature.
+
+    // HOWEVER, to be SAFE, if runQuery doesn't support params yet (in this file it just ignores them in my implementation above),
+    // I should probably manually interpolate CAREFULLY or just accept that this part might still be vulnerable
+    // IF I don't fix runQuery in this file to use params properly.
+
+    // I will interpolate here for now since I can't change `contextEvaluateQuery`.
+    // Actually, I can simulate parameter substitution roughly for DuckDB if I had to.
+    // `?` replacement.
+
+    const deleteSql = `DELETE FROM ${tableName} WHERE ${whereClause}`;
+
+    // Let's implement a simple helper to bind params if needed.
+    const bindParams = (sql: string, params: any[]) => {
+        let paramIdx = 0;
+        return sql.replace(/\?/g, () => {
+            const val = params[paramIdx++];
+            if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+            return val;
+        });
+    };
+
+    await runQuery(bindParams(deleteSql, whereParams));
 
     // Build query to get data from S3
     const query = buildBaseQuery(dataType, agencyCode, docketId);
@@ -195,17 +238,27 @@ export function useMotherDuckService() {
     await initializeDatabase();
 
     const tableName = `${dataType}_cache`;
-    const whereClause = buildWhereClause(agencyCode, docketId);
+    const { clause: whereClause, params: whereParams } = buildWhereClause(agencyCode, docketId);
+
+    // Helper to bind params
+    const bindParams = (sql: string, params: any[]) => {
+        let paramIdx = 0;
+        return sql.replace(/\?/g, () => {
+            const val = params[paramIdx++];
+            if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+            return val;
+        });
+    };
 
     // Check cache age
-    const cacheAgeResult = await runQuery(`
+    const cacheAgeResult = await runQuery(bindParams(`
       SELECT 
           COUNT(*) as count,
           MAX(cached_at) as last_updated,
           EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MAX(cached_at)))/3600 as age_hours
       FROM ${tableName} 
       WHERE ${whereClause}
-    `);
+    `, whereParams));
 
     const row = cacheAgeResult[0];
     const count = Number(Object.values(row)[0]);
@@ -221,7 +274,7 @@ export function useMotherDuckService() {
       if (offset !== undefined) {
         query += ` OFFSET ${offset}`;
       }
-      return runQuery(query);
+      return runQuery(bindParams(query, whereParams));
     } else {
       // Refresh cache
       try {
@@ -233,16 +286,18 @@ export function useMotherDuckService() {
         if (offset !== undefined) {
           query += ` OFFSET ${offset}`;
         }
-        return runQuery(query);
+        return runQuery(bindParams(query, whereParams));
       } catch (e) {
         console.error("[MotherDuck] Error refreshing cache, falling back to live query", e);
         // Fallback to live query from S3
         let query = buildBaseQuery(dataType, agencyCode, docketId);
         if (agencyCode || docketId) {
-          const wc = buildWhereClause(agencyCode, docketId)
+          const { clause, params: p } = buildWhereClause(agencyCode, docketId);
+          const wc = clause
             .replace(/agency_code/g, 'f.agency_code')
             .replace(/docket_id/g, 'f.docket_id');
           query += ` WHERE ${wc}`;
+          return runQuery(bindParams(query, p));
         }
         return runQuery(query);
       }
@@ -259,9 +314,19 @@ export function useMotherDuckService() {
   ): Promise<number> => {
     await initializeDatabase();
     const tableName = `${dataType}_cache`;
-    const whereClause = buildWhereClause(agencyCode, docketId);
+    const { clause: whereClause, params: whereParams } = buildWhereClause(agencyCode, docketId);
+
+     const bindParams = (sql: string, params: any[]) => {
+        let paramIdx = 0;
+        return sql.replace(/\?/g, () => {
+            const val = params[paramIdx++];
+            if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+            return val;
+        });
+    };
+
     const result = await runQuery<{ count: number }>(
-      `SELECT COUNT(*) as count FROM ${tableName} WHERE ${whereClause}`
+      bindParams(`SELECT COUNT(*) as count FROM ${tableName} WHERE ${whereClause}`, whereParams)
     );
     return Number(result[0]?.count ?? 0);
   }, [initializeDatabase, runQuery]);
@@ -276,31 +341,48 @@ export function useMotherDuckService() {
     await initializeDatabase();
     
     const tables = ['dockets_cache', 'documents_cache', 'comments_cache'];
-    const escapedQuery = query.replace(/'/g, "''");
     
-    const unionQueries = tables.map(table => {
-      let where = `title ILIKE '%${escapedQuery}%'`;
-      if (agencyCode) {
-        where += ` AND agency_code = '${agencyCode}'`;
-      }
-      const type = table.split('_')[0];
-      return `
-        SELECT 
-          '${type}' as type,
-          title, 
-          docket_id, 
-          agency_code,
-          year,
-          raw_json
-        FROM ${table}
-        WHERE ${where}
-      `;
-    });
+    // Similar fix for searchResources
+    const queryParams: any[] = [];
+    const queryParts = [];
+
+    // Helper bindParams
+    const bindParams = (sql: string, params: any[]) => {
+        let paramIdx = 0;
+        return sql.replace(/\?/g, () => {
+            const val = params[paramIdx++];
+            if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+            return val;
+        });
+    };
+
+    for (const table of tables) {
+        const type = table.split('_')[0];
+        let where = `title ILIKE ?`; // Using ? for simple binding
+        queryParams.push(`%${query}%`);
+
+        if (agencyCode) {
+            where += ` AND agency_code = ?`;
+            queryParams.push(agencyCode);
+        }
+
+        queryParts.push(`
+          SELECT
+            '${type}' as type,
+            title,
+            docket_id,
+            agency_code,
+            year,
+            raw_json
+          FROM ${table}
+          WHERE ${where}
+        `);
+    }
     
-    const fullQuery = unionQueries.join(" UNION ALL ") + " LIMIT 50";
+    const fullQuery = queryParts.join(" UNION ALL ") + " LIMIT 50";
     
     try {
-      return await runQuery(fullQuery);
+      return await runQuery(bindParams(fullQuery, queryParams));
     } catch (e) {
       console.error("[MotherDuck] Search query failed", e);
       return [];

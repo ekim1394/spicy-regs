@@ -37,17 +37,21 @@ export function buildBaseQuery(
     `;
 }
 
-export function buildWhereClause(agencyCode?: string, docketId?: string): string {
-  const whereClause: string[] = [];
+export function buildWhereClause(agencyCode?: string, docketId?: string): { clause: string, params: any[] } {
+  const conditions: string[] = [];
+  const params: any[] = [];
+
   if (agencyCode) {
-    whereClause.push(`agency_code = '${agencyCode.toUpperCase()}'`);
+    conditions.push(`agency_code = ?`);
+    params.push(agencyCode.toUpperCase());
   }
   if (docketId) {
-    whereClause.push(`docket_id = '${docketId.toUpperCase()}'`);
+    conditions.push(`docket_id = ?`);
+    params.push(docketId.toUpperCase());
   }
   
-  if (whereClause.length === 0) {
-    return "1=1";
+  if (conditions.length === 0) {
+    return { clause: "1=1", params: [] };
   }
-  return whereClause.join(" AND ");
+  return { clause: conditions.join(" AND "), params };
 }

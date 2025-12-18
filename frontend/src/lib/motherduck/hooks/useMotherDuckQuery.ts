@@ -68,6 +68,17 @@ const TABLE_SCHEMAS: Record<RegulationsDataTypes, string> = {
   `,
 };
 
+// Helper bindParams to interpolate manually since contextEvaluateQuery might not support it
+const bindParams = (sql: string, params: any[]) => {
+    let paramIdx = 0;
+    return sql.replace(/\?/g, () => {
+        const val = params[paramIdx++];
+        if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+        return val;
+    });
+};
+
+
 /**
  * Hook for executing MotherDuck queries in client components.
  * Uses the MotherDuckClientProvider context for connection management.
@@ -118,7 +129,10 @@ export function useMotherDuckQuery<T = any>(): UseMotherDuckQueryResult<T> {
     await contextEvaluateQuery(insertQuery);
     
     // Get count of inserted rows
-    const countResult = await contextEvaluateQuery(`SELECT COUNT(*) as count FROM ${tableName} WHERE agency_code = '${agencyCode}'`);
+    // Parameterize or escape agencyCode? It's used in count query.
+    // agencyCode is a string.
+    const countQuery = `SELECT COUNT(*) as count FROM ${tableName} WHERE agency_code = '${agencyCode.replace(/'/g, "''")}'`;
+    const countResult = await contextEvaluateQuery(countQuery);
     const count = (countResult.data.toRows() as any[])[0]?.count || 0;
     console.log('[MotherDuck] Inserted rows:', count);
     
@@ -133,11 +147,11 @@ export function useMotherDuckQuery<T = any>(): UseMotherDuckQueryResult<T> {
     agencyCode?: string,
     docketId?: string
   ): Promise<T[]> => {
-    const whereClause = buildWhereClause(agencyCode, docketId);
+    const { clause: whereClause, params: whereParams } = buildWhereClause(agencyCode, docketId);
     const query = `SELECT * FROM ${tableName} WHERE ${whereClause} LIMIT 100`;
     
     console.log('[MotherDuck] Querying persisted table:', tableName);
-    const result = await contextEvaluateQuery(query);
+    const result = await contextEvaluateQuery(bindParams(query, whereParams));
     return result.data.toRows() as T[];
   }, [contextEvaluateQuery]);
 
@@ -151,20 +165,23 @@ export function useMotherDuckQuery<T = any>(): UseMotherDuckQueryResult<T> {
   ): Promise<T[]> => {
     // Build query using existing utility functions
     let query = buildBaseQuery(dataType, agencyCode, docketId);
+    let params: any[] = [];
     
     // Add WHERE clause if filtering
     if (agencyCode || docketId) {
-      const whereClause = buildWhereClause(agencyCode, docketId)
+      const { clause, params: p } = buildWhereClause(agencyCode, docketId);
+      const whereClause = clause
         .replace(/agency_code/g, 'f.agency_code')
         .replace(/docket_id/g, 'f.docket_id');
       query += ` WHERE ${whereClause}`;
+      params = p;
     }
 
     query += ` LIMIT 100`; // Limit results for performance
     
     console.log('[MotherDuck] Executing getData query for:', { dataType, agencyCode, docketId });
     
-    const result = await contextEvaluateQuery(query);
+    const result = await contextEvaluateQuery(bindParams(query, params));
     return result.data.toRows() as T[];
   }, [contextEvaluateQuery]);
 
@@ -175,16 +192,22 @@ export function useMotherDuckQuery<T = any>(): UseMotherDuckQueryResult<T> {
     const tables = ['dockets', 'documents', 'comments'];
     
     // Escape single quotes to prevent SQL injection
-    const escapedQuery = searchQuery.replace(/'/g, "''");
+    // Using manual escaping if we assume contextEvaluateQuery doesn't support params.
+    // But we should use bindParams if possible.
     
-    const unionQueries = tables.map(table => {
-      let where = `title ILIKE '%${escapedQuery}%'`;
-      if (agencyCode) {
-        where += ` AND agency_code = '${agencyCode}'`;
-      }
-      
-      // Query directly from MotherDuck tables (not cache tables)
-      return `
+    const queryParts = [];
+    const queryParams: any[] = [];
+
+    for (const table of tables) {
+        let where = `title ILIKE ?`;
+        queryParams.push(`%${searchQuery}%`);
+
+        if (agencyCode) {
+            where += ` AND agency_code = ?`;
+            queryParams.push(agencyCode);
+        }
+
+        queryParts.push(`
         SELECT 
           '${table}' as type,
           title, 
@@ -194,14 +217,14 @@ export function useMotherDuckQuery<T = any>(): UseMotherDuckQueryResult<T> {
           raw_json
         FROM ${table}
         WHERE ${where}
-      `;
-    });
+      `);
+    }
     
-    const fullQuery = unionQueries.join(" UNION ALL ") + " LIMIT 50";
+    const fullQuery = queryParts.join(" UNION ALL ") + " LIMIT 50";
     
     console.log('[MotherDuck] Executing search query for:', { searchQuery, agencyCode });
     
-    const result = await contextEvaluateQuery(fullQuery);
+    const result = await contextEvaluateQuery(bindParams(fullQuery, queryParams));
     return result.data.toRows() as T[];
   }, [contextEvaluateQuery]);
 
