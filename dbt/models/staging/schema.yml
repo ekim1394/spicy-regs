@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: stg_mirrulations__dockets
+    description: "Staged dockets data from Mirrulations"
+    columns:
+      - name: docket_id
+        description: "Primary key for dockets"
+        tests:
+          - unique
+          - not_null
+      - name: modify_date
+        description: "Last modification date of the docket"
+        tests:
+          - not_null

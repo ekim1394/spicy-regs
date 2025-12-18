@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: mirrulations
+    description: "Raw data from Mirrulations"
+    tables:
+      - name: dockets
+        description: "Raw dockets data"
+        external:
+          location: "../sample-data/mirrulations/docket-*.json"
+          options:
+            format: "json"

@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: dim_dockets
+    description: "Dimension table for dockets"
+    columns:
+      - name: docket_sk
+        description: "Surrogate key for dockets (MD5 hash of docket_id)"
+        tests:
+          - unique
+          - not_null
+      - name: docket_id
+        description: "Natural key for dockets"
+        tests:
+          - unique
+          - not_null
+      - name: agency_id
+        description: "Foreign key to agency dimension"
+        tests:
+          - not_null
