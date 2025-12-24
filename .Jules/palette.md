@@ -1,0 +1,3 @@
+## 2024-02-14 - Accessible Search Input Pattern
+**Learning:** Native `input[type="search"]` elements provide good accessibility out of the box (like virtual keyboards on mobile), but often come with browser-specific UI elements (like a "clear" X button) that are inconsistent or hard to style. Implementing a custom clear button while keeping `type="search"` requires explicitly hiding the native controls (e.g., `[&::-webkit-search-cancel-button]:hidden`) to avoid duplicate interactive elements.
+**Action:** When customizing search inputs, always set `type="search"`, add an `aria-label` since the visual label is often omitted, and manage focus programmatically (using `ref.current.focus()`) after custom actions like clearing the text to maintain keyboard flow.
