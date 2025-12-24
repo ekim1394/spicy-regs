@@ -70,17 +70,28 @@ export async function getDb(): Promise<AsyncDuckDB> {
   return dbInstance;
 }
 
-export async function runQuery<T = any>(sql: string): Promise<T[]> {
+export async function runQuery<T = any>(sql: string, params?: any[]): Promise<T[]> {
   const db = await getDb();
   
   if (!connInstance) {
      connInstance = await db.connect();
   }
   
-  const result = await connInstance.query(sql);
-  const rows = result.toArray().map((row: any) => row.toJSON());
-  
-  return rows as T[];
+  if (params && params.length > 0) {
+      // DuckDB WASM prepare + query for params
+      const stmt = await connInstance.prepare(sql);
+      try {
+        const result = await stmt.query(...params);
+        const rows = result.toArray().map((row: any) => row.toJSON());
+        return rows as T[];
+      } finally {
+        await stmt.close();
+      }
+  } else {
+      const result = await connInstance.query(sql);
+      const rows = result.toArray().map((row: any) => row.toJSON());
+      return rows as T[];
+  }
 }
 
 export async function initDb() {

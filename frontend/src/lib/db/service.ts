@@ -90,12 +90,25 @@ export async function searchResources(query: string, agencyCode?: string): Promi
   await initializeDatabase();
   
   const tables = ['dockets_cache', 'documents_cache', 'comments_cache'];
-  const results = [];
-  const escapedQuery = query.replace(/'/g, "''");
+
+  // Prepare parameters array
+  const params: any[] = [];
+
+  // NOTE: DuckDB prepared statements use ? as placeholder.
+  // We need to construct the query with placeholders and push params.
+
+  // However, DuckDB WASM prepared statements across a UNION ALL might be tricky if not careful.
+  // Ideally we should use a single parameterized query or execute them separately?
+  // But a UNION ALL is efficient.
+
+  // Let's iterate and build the query parts.
   const unionQueries = tables.map(table => {
-    let where = `title ILIKE '%${escapedQuery}%'`;
+    let where = `title ILIKE ?`;
+    params.push(`%${query}%`);
+
     if (agencyCode) {
-        where += ` AND agency_code = '${agencyCode}'`;
+        where += ` AND agency_code = ?`;
+        params.push(agencyCode);
     }
     const type = table.split('_')[0];
     return `
@@ -114,7 +127,7 @@ export async function searchResources(query: string, agencyCode?: string): Promi
   const fullQuery = unionQueries.join(" UNION ALL ") + " LIMIT 50";
   
   try {
-     return await runQuery(fullQuery);
+     return await runQuery(fullQuery, params);
   } catch (e) {
      console.error("Search query failed", e);
      return [];
