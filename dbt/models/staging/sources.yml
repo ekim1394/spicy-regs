@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: local_files
+    description: "Local JSON files in sample-data"
+    tables:
+      - name: dockets
+        description: "Raw dockets data from sample-data/mirrulations/docket-*.json"
