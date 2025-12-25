@@ -1,0 +1,3 @@
+## 2024-05-22 - Dependency Restrictions and Testing
+**Learning:** Adding new dependencies (like `@testing-library/react`) to the project, even for verifying changes, is strictly prohibited without explicit user permission. The environment may not have the necessary tools for full component testing if they are not already present.
+**Action:** In future performance tasks, verify logic with existing tools or manual verification if possible. If new dependencies are needed, ask the user first. Rely on code analysis and standard patterns (like `React.memo` and `useMemo`) when full integration testing is blocked by dependency restrictions.
