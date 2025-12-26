@@ -45,23 +45,26 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
     fetchBookmarks();
   }, []);
 
-  const handleToggleBookmark = async (item: RegulationData) => {
+  const handleToggleBookmark = useCallback(async (item: RegulationData) => {
     const resourceId = dataType === 'comments' 
       ? (stripQuotes(item.comment_id) || item.docket_id)
       : item.docket_id;
 
     if (!resourceId) return;
 
+    setBookmarks(prevBookmarks => {
+      const isBookmarked = prevBookmarks.has(resourceId);
+      const newBookmarks = new Set(prevBookmarks);
+
+      if (isBookmarked) {
+        newBookmarks.delete(resourceId);
+      } else {
+        newBookmarks.add(resourceId);
+      }
+      return newBookmarks;
+    });
+
     const isBookmarked = bookmarks.has(resourceId);
-    
-    // Optimistic update
-    const newBookmarks = new Set(bookmarks);
-    if (isBookmarked) {
-      newBookmarks.delete(resourceId);
-    } else {
-      newBookmarks.add(resourceId);
-    }
-    setBookmarks(newBookmarks);
 
     try {
       if (isBookmarked) {
@@ -85,9 +88,15 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
       }
     } catch (e) {
       console.error("Failed to toggle bookmark", e);
-      setBookmarks(bookmarks);
+      // Revert on error
+      setBookmarks(prev => {
+        const newSet = new Set(prev);
+        if (isBookmarked) newSet.add(resourceId);
+        else newSet.delete(resourceId);
+        return newSet;
+      });
     }
-  };
+  }, [bookmarks, dataType, agencyCode]);
 
   // Reset data when filters change
   useEffect(() => {
@@ -181,6 +190,36 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
     return Array.from(dataMap.values());
   }, [data, dataType]);
 
+  // Memoized item content function for Virtuoso
+  const itemContent = useCallback((index: number, item: RegulationData) => {
+    const key = dataType === 'comments'
+      ? (stripQuotes(item.comment_id) || item.docket_id)
+      : item.docket_id;
+
+    const isBookmarked = bookmarks.has(key);
+
+    return (
+      <div className="pb-4">
+        {dataType === 'comments' ? (
+          <CommentCard
+              key={`${key}-${index}`}
+              item={item}
+              isBookmarked={isBookmarked}
+              onToggleBookmark={handleToggleBookmark}
+          />
+        ) : (
+          <DocketOrDocumentCard
+              key={`${key}-${index}`}
+              item={item}
+              dataType={dataType}
+              isBookmarked={isBookmarked}
+              onToggleBookmark={handleToggleBookmark}
+          />
+        )}
+      </div>
+    );
+  }, [dataType, bookmarks, handleToggleBookmark]);
+
   if (!agencyCode) {
     return (
       <div className="p-8 text-center text-gray-500 dark:text-gray-400">
@@ -246,34 +285,7 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
           data={uniqueData}
           endReached={loadMore}
           overscan={200}
-          itemContent={(index, item) => {
-            const key = dataType === 'comments' 
-              ? (stripQuotes(item.comment_id) || item.docket_id)
-              : item.docket_id;
-            
-            const isBookmarked = bookmarks.has(key);
-
-            return (
-              <div className="pb-4">
-                {dataType === 'comments' ? (
-                  <CommentCard 
-                      key={`${key}-${index}`} 
-                      item={item} 
-                      isBookmarked={isBookmarked}
-                      onToggleBookmark={() => handleToggleBookmark(item)}
-                  />
-                ) : (
-                  <DocketOrDocumentCard 
-                      key={`${key}-${index}`} 
-                      item={item} 
-                      dataType={dataType}
-                      isBookmarked={isBookmarked}
-                      onToggleBookmark={() => handleToggleBookmark(item)}
-                  />
-                )}
-              </div>
-            );
-          }}
+          itemContent={itemContent}
           components={{
             Footer: () => {
               if (loadingMore) {
