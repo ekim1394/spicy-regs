@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useMotherDuckClientState } from '@/lib/motherduck/context/motherduckClientContext';
 import { RegulationsDataTypes } from '@/lib/db/models';
-import { buildBaseQuery, buildWhereClause } from '@/lib/db/utils';
+import { buildBaseQuery, buildWhereClause, escapeSqlString } from '@/lib/db/utils';
 
 /**
  * Hook that provides the same getData and searchResources logic from service.ts
@@ -276,12 +276,12 @@ export function useMotherDuckService() {
     await initializeDatabase();
     
     const tables = ['dockets_cache', 'documents_cache', 'comments_cache'];
-    const escapedQuery = query.replace(/'/g, "''");
+    const escapedQuery = escapeSqlString(query);
     
     const unionQueries = tables.map(table => {
       let where = `title ILIKE '%${escapedQuery}%'`;
       if (agencyCode) {
-        where += ` AND agency_code = '${agencyCode}'`;
+        where += ` AND agency_code = '${escapeSqlString(agencyCode)}'`;
       }
       const type = table.split('_')[0];
       return `
