@@ -1,0 +1,17 @@
+version: 2
+
+models:
+  - name: stg_dockets
+    description: "Staging model for regulations.gov dockets ingested from JSON files."
+    columns:
+      - name: docket_id
+        description: "Primary key for the docket."
+        tests:
+          - unique
+          - not_null
+      - name: agency_id
+        description: "The agency identifier associated with the docket."
+      - name: title
+        description: "The title of the docket."
+      - name: modify_date
+        description: "The date the docket was last modified."
