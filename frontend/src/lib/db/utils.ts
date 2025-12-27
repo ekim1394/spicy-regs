@@ -15,7 +15,7 @@ export function buildBaseQuery(
   } else if (agencyCode) {
     path = `s3://mirrulations/raw-data/${agencyCode}/*/*/${mapping.path_pattern}`;
   } else {
-    path = `s3://mirrulations/raw-data/*/*/${mapping.path_pattern}`;
+    path = `s3://mirrulations/raw-data/*/*/*/${mapping.path_pattern}`;
   }
 
   return `
