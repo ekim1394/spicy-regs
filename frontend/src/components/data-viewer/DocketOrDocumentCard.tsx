@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { RegulationData, DataType } from '@/lib/api';
 import { useCopilotReadable } from "@copilotkit/react-core";
 import { stripQuotes, formatDate, parseRawJson } from './utils';
@@ -24,10 +24,10 @@ interface DocketOrDocumentCardProps {
   item: RegulationData;
   dataType: DataType;
   isBookmarked: boolean;
-  onToggleBookmark: () => void;
+  onToggleBookmark: (item: RegulationData) => void;
 }
 
-export function DocketOrDocumentCard({ 
+function DocketOrDocumentCardComponent({
   item, 
   dataType,
   isBookmarked,
@@ -93,7 +93,7 @@ export function DocketOrDocumentCard({
             </h3>
             <BookmarkButton 
               isBookmarked={isBookmarked} 
-              onToggle={onToggleBookmark} 
+              onToggle={() => onToggleBookmark(item)}
               loading={false} 
             />
             <ExplainButton itemTitle={title || docketId} dataType={isDocument ? 'document' : 'docket'} />
@@ -318,3 +318,5 @@ export function DocketOrDocumentCard({
     </div>
   );
 }
+
+export const DocketOrDocumentCard = memo(DocketOrDocumentCardComponent);

@@ -45,24 +45,38 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
     fetchBookmarks();
   }, []);
 
-  const handleToggleBookmark = async (item: RegulationData) => {
+  // Use useCallback to memoize handleToggleBookmark
+  const handleToggleBookmark = useCallback(async (item: RegulationData) => {
     const resourceId = dataType === 'comments' 
       ? (stripQuotes(item.comment_id) || item.docket_id)
       : item.docket_id;
 
     if (!resourceId) return;
 
+    // Use functional update to access latest state without adding it to dependency array if possible,
+    // but here we need `bookmarks` in scope to check `has`.
+    // Actually we can use functional update for setBookmarks but we need to know `isBookmarked` first.
+    // So we depend on `bookmarks`.
+    // If bookmarks change, this function changes. That is expected.
+    // But other state changes (like loadingMore) won't affect this function.
+
+    setBookmarks(currentBookmarks => {
+        const isBookmarked = currentBookmarks.has(resourceId);
+        const newBookmarks = new Set(currentBookmarks);
+
+        if (isBookmarked) {
+          newBookmarks.delete(resourceId);
+        } else {
+          newBookmarks.add(resourceId);
+        }
+
+        return newBookmarks;
+    });
+
+    // We need to know if it was bookmarked to make the API call correctly.
+    // Since we are inside useCallback, we rely on `bookmarks` closure.
     const isBookmarked = bookmarks.has(resourceId);
     
-    // Optimistic update
-    const newBookmarks = new Set(bookmarks);
-    if (isBookmarked) {
-      newBookmarks.delete(resourceId);
-    } else {
-      newBookmarks.add(resourceId);
-    }
-    setBookmarks(newBookmarks);
-
     try {
       if (isBookmarked) {
         await fetch(`/api/bookmarks?resource_id=${resourceId}`, { method: 'DELETE' });
@@ -85,9 +99,15 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
       }
     } catch (e) {
       console.error("Failed to toggle bookmark", e);
-      setBookmarks(bookmarks);
+      // Revert on error
+      setBookmarks(prev => {
+         const newBookmarks = new Set(prev);
+         if (isBookmarked) newBookmarks.add(resourceId);
+         else newBookmarks.delete(resourceId);
+         return newBookmarks;
+      });
     }
-  };
+  }, [bookmarks, dataType, agencyCode]);
 
   // Reset data when filters change
   useEffect(() => {
@@ -181,6 +201,68 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
     return Array.from(dataMap.values());
   }, [data, dataType]);
 
+  // Memoize itemContent to prevent unnecessary re-renders of list items
+  const itemContent = useCallback((index: number, item: RegulationData) => {
+    const key = dataType === 'comments'
+      ? (stripQuotes(item.comment_id) || item.docket_id)
+      : item.docket_id;
+
+    const isBookmarked = bookmarks.has(key);
+
+    return (
+      <div className="pb-4">
+        {dataType === 'comments' ? (
+          <CommentCard
+              key={`${key}-${index}`}
+              item={item}
+              isBookmarked={isBookmarked}
+              onToggleBookmark={handleToggleBookmark}
+          />
+        ) : (
+          <DocketOrDocumentCard
+              key={`${key}-${index}`}
+              item={item}
+              dataType={dataType}
+              isBookmarked={isBookmarked}
+              onToggleBookmark={handleToggleBookmark}
+          />
+        )}
+      </div>
+    );
+  }, [dataType, bookmarks, handleToggleBookmark]);
+
+  // Memoize footer to prevent re-renders of the list when loadingMore state changes
+  // Actually, footer depends on loadingMore and hasMore, so it will change.
+  // But Virtuoso handles footer separately from items.
+  const Footer = useMemo(() => {
+    const hasMore = uniqueData.length < totalCount;
+    return () => {
+        if (loadingMore) {
+          return (
+            <div className="flex justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+          );
+        }
+        if (hasMore) {
+          return (
+            <div className="flex justify-center py-4">
+              <button
+                onClick={loadMore}
+                className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Load more...
+              </button>
+            </div>
+          );
+        }
+        return null;
+    };
+  }, [loadingMore, uniqueData.length, totalCount, loadMore]);
+
+  // Memoize components object
+  const components = useMemo(() => ({ Footer }), [Footer]);
+
   if (!agencyCode) {
     return (
       <div className="p-8 text-center text-gray-500 dark:text-gray-400">
@@ -224,8 +306,6 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
     );
   }
 
-  const hasMore = uniqueData.length < totalCount;
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-4">
@@ -246,58 +326,8 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
           data={uniqueData}
           endReached={loadMore}
           overscan={200}
-          itemContent={(index, item) => {
-            const key = dataType === 'comments' 
-              ? (stripQuotes(item.comment_id) || item.docket_id)
-              : item.docket_id;
-            
-            const isBookmarked = bookmarks.has(key);
-
-            return (
-              <div className="pb-4">
-                {dataType === 'comments' ? (
-                  <CommentCard 
-                      key={`${key}-${index}`} 
-                      item={item} 
-                      isBookmarked={isBookmarked}
-                      onToggleBookmark={() => handleToggleBookmark(item)}
-                  />
-                ) : (
-                  <DocketOrDocumentCard 
-                      key={`${key}-${index}`} 
-                      item={item} 
-                      dataType={dataType}
-                      isBookmarked={isBookmarked}
-                      onToggleBookmark={() => handleToggleBookmark(item)}
-                  />
-                )}
-              </div>
-            );
-          }}
-          components={{
-            Footer: () => {
-              if (loadingMore) {
-                return (
-                  <div className="flex justify-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                  </div>
-                );
-              }
-              if (hasMore) {
-                return (
-                  <div className="flex justify-center py-4">
-                    <button 
-                      onClick={loadMore}
-                      className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      Load more...
-                    </button>
-                  </div>
-                );
-              }
-              return null;
-            }
-          }}
+          itemContent={itemContent}
+          components={components}
         />
       </div>
     </div>
