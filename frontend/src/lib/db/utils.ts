@@ -37,13 +37,17 @@ export function buildBaseQuery(
     `;
 }
 
+export function escapeSqlString(str: string): string {
+  return str.replace(/'/g, "''");
+}
+
 export function buildWhereClause(agencyCode?: string, docketId?: string): string {
   const whereClause: string[] = [];
   if (agencyCode) {
-    whereClause.push(`agency_code = '${agencyCode.toUpperCase()}'`);
+    whereClause.push(`agency_code = '${escapeSqlString(agencyCode.toUpperCase())}'`);
   }
   if (docketId) {
-    whereClause.push(`docket_id = '${docketId.toUpperCase()}'`);
+    whereClause.push(`docket_id = '${escapeSqlString(docketId.toUpperCase())}'`);
   }
   
   if (whereClause.length === 0) {
