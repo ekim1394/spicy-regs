@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { RegulationData } from '@/lib/api';
 import { useCopilotReadable } from "@copilotkit/react-core";
 import { stripQuotes, formatDate, parseRawJson } from './utils';
@@ -23,12 +23,12 @@ function toJsonSafe(obj: any): any {
 interface CommentCardProps {
   item: RegulationData;
   isBookmarked: boolean;
-  onToggleBookmark: () => void;
+  onToggleBookmark: (item: RegulationData) => void;
 }
 
-export function CommentCard({ item, isBookmarked, onToggleBookmark }: CommentCardProps) {
+export const CommentCard = memo(function CommentCard({ item, isBookmarked, onToggleBookmark }: CommentCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const parsedJson = parseRawJson(item.raw_json);
+  const parsedJson = useMemo(() => parseRawJson(item.raw_json), [item.raw_json]);
   const attributes = parsedJson?.data?.attributes || parsedJson?.attributes || (parsedJson && !parsedJson.data ? parsedJson : {});
   const included = parsedJson?.included || [];
 
@@ -59,9 +59,11 @@ export function CommentCard({ item, isBookmarked, onToggleBookmark }: CommentCar
   // Attachments
   const attachments = included.filter((item: any) => item.type === 'attachments');
 
+  const copilotValue = useMemo(() => toJsonSafe(item), [item]);
+
   useCopilotReadable({
     description: `A public comment on a federal regulation. Title: ${title}. Comment Text: ${commentText}. Submitter: ${submitterName}. Posted Date: ${postedDate}.`,
-    value: toJsonSafe(item)  // Convert BigInt values to avoid serialization error
+    value: copilotValue
   });
 
   return (
@@ -75,7 +77,7 @@ export function CommentCard({ item, isBookmarked, onToggleBookmark }: CommentCar
             </h3>
             <BookmarkButton 
               isBookmarked={isBookmarked} 
-              onToggle={onToggleBookmark} 
+              onToggle={() => onToggleBookmark(item)}
               loading={false} 
             />
             <ExplainButton itemTitle={title} dataType="comment" />
@@ -221,4 +223,4 @@ export function CommentCard({ item, isBookmarked, onToggleBookmark }: CommentCar
       </div>
     </div>
   );
-}
+});
