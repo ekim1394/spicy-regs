@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: stg_dockets
+    description: "Staging model for dockets from Regulations.gov"
+    columns:
+      - name: docket_id
+        description: "Primary key for dockets"
+        tests:
+          - unique
+          - not_null
+      - name: agency_id
+        description: "The agency that owns the docket"
+        tests:
+          - not_null
+
+  - name: stg_documents
+    description: "Staging model for documents from Regulations.gov"
+    columns:
+      - name: document_id
+        description: "Primary key for documents"
+        tests:
+          - unique
+          - not_null
+      - name: docket_id
+        description: "Foreign key to the docket"
+        tests:
+          - not_null
+      - name: agency_id
+        description: "The agency that owns the document"
+        tests:
+          - not_null
+
+  - name: stg_comments
+    description: "Staging model for comments from Regulations.gov"
+    columns:
+      - name: comment_id
+        description: "Primary key for comments"
+        tests:
+          - unique
+          - not_null
+      - name: docket_id
+        description: "Foreign key to the docket"
+        tests:
+          - not_null
+      - name: document_id
+        description: "Foreign key to the document"
+        tests:
+          - not_null
