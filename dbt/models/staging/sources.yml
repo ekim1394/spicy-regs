@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: raw_dockets
+    schema: main
+    description: "Raw docket data from JSON files"
+    tables:
+      - name: dockets_json
+        description: "Raw JSON data for dockets"
+        meta:
+          external_location: "read_json_auto('{{ var('data_path') }}/docket-*.json')"

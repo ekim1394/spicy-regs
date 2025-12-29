@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: stg_dockets
+    description: "Staging model for dockets data, unpacking JSON attributes and standardizing types."
+    columns:
+      - name: docket_key
+        description: "Surrogate key for the docket"
+        tests:
+          - unique
+          - not_null
+
+      - name: docket_id
+        description: "Primary natural key from source"
+        tests:
+          - unique
+          - not_null
+
+      - name: agency_id
+        description: "Agency identifier"
+
+      - name: last_modified_date
+        description: "Date the docket was last modified"
