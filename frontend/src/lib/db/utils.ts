@@ -1,6 +1,11 @@
 import { FIELD_MAPPINGS } from "./constants";
 import { RegulationsDataTypes } from "./models";
 
+export function escapeSqlString(value: string): string {
+  if (!value) return "";
+  return value.replace(/'/g, "''");
+}
+
 export function buildBaseQuery(
   dataType: RegulationsDataTypes,
   agencyCode?: string,
@@ -40,10 +45,10 @@ export function buildBaseQuery(
 export function buildWhereClause(agencyCode?: string, docketId?: string): string {
   const whereClause: string[] = [];
   if (agencyCode) {
-    whereClause.push(`agency_code = '${agencyCode.toUpperCase()}'`);
+    whereClause.push(`agency_code = '${escapeSqlString(agencyCode.toUpperCase())}'`);
   }
   if (docketId) {
-    whereClause.push(`docket_id = '${docketId.toUpperCase()}'`);
+    whereClause.push(`docket_id = '${escapeSqlString(docketId.toUpperCase())}'`);
   }
   
   if (whereClause.length === 0) {
