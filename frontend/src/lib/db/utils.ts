@@ -37,13 +37,22 @@ export function buildBaseQuery(
     `;
 }
 
+/**
+ * Escapes single quotes in a string by doubling them, making it safe for SQL.
+ */
+export function escapeSqlString(str: string): string {
+  return str.replace(/'/g, "''");
+}
+
 export function buildWhereClause(agencyCode?: string, docketId?: string): string {
   const whereClause: string[] = [];
   if (agencyCode) {
-    whereClause.push(`agency_code = '${agencyCode.toUpperCase()}'`);
+    const escaped = escapeSqlString(agencyCode.toUpperCase());
+    whereClause.push(`agency_code = '${escaped}'`);
   }
   if (docketId) {
-    whereClause.push(`docket_id = '${docketId.toUpperCase()}'`);
+    const escaped = escapeSqlString(docketId.toUpperCase());
+    whereClause.push(`docket_id = '${escaped}'`);
   }
   
   if (whereClause.length === 0) {
