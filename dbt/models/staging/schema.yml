@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: stg_dockets
+    description: "Staging model for dockets"
+    columns:
+      - name: docket_id
+        description: "Primary key for dockets"
+        tests:
+          - unique
+          - not_null
+      - name: agency_id
+        description: "The agency that issued the docket"
+      - name: title
+        description: "Title of the docket"
+      - name: last_modified_date
+        description: "Last modified timestamp"
+
+  - name: stg_documents
+    description: "Staging model for documents"
+    columns:
+      - name: document_id
+        description: "Primary key for documents"
+        tests:
+          - unique
+          - not_null
+      - name: docket_id
+        description: "Foreign key to dockets"
+        tests:
+          - not_null
+      - name: posted_date
+        description: "Date the document was posted"
+
+  - name: stg_comments
+    description: "Staging model for comments"
+    columns:
+      - name: comment_id
+        description: "Primary key for comments"
+        tests:
+          - unique
+          - not_null
+      - name: docket_id
+        description: "Foreign key to dockets"
+      - name: document_id
+        description: "Foreign key to the document being commented on"
+      - name: posted_date
+        description: "Date the comment was posted"

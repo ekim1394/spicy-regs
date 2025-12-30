@@ -1,0 +1,6 @@
+spicy_regs:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: 'spicy_regs.duckdb'
