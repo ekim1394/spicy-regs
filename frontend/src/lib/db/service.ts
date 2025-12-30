@@ -1,6 +1,6 @@
 import { runQuery, initDb, getDb } from "./client";
 import { RegulationsDataTypes } from "./models";
-import { buildBaseQuery, buildWhereClause } from "./utils";
+import { buildBaseQuery, buildWhereClause, escapeSqlString } from "./utils";
 import { initializeDatabase } from "./config";
 
 async function refreshCache(
@@ -90,12 +90,11 @@ export async function searchResources(query: string, agencyCode?: string): Promi
   await initializeDatabase();
   
   const tables = ['dockets_cache', 'documents_cache', 'comments_cache'];
-  const results = [];
-  const escapedQuery = query.replace(/'/g, "''");
+  const escapedQuery = escapeSqlString(query);
   const unionQueries = tables.map(table => {
     let where = `title ILIKE '%${escapedQuery}%'`;
     if (agencyCode) {
-        where += ` AND agency_code = '${agencyCode}'`;
+        where += ` AND agency_code = '${escapeSqlString(agencyCode)}'`;
     }
     const type = table.split('_')[0];
     return `
