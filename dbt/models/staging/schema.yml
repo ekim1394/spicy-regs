@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: stg_dockets
+    description: "Staging model for Docket data from Regulations.gov"
+    columns:
+      - name: docket_id
+        description: "Primary key for the docket"
+        tests:
+          - unique
+          - not_null
+      - name: agency_id
+        description: "The agency identifier (e.g., EPA, IRS)"
+        tests:
+          - not_null
+      - name: last_modified_date
+        description: "The last modification date of the docket"
+
+  - name: stg_documents
+    description: "Staging model for Document data from Regulations.gov"
+    columns:
+      - name: document_id
+        description: "Primary key for the document"
+        tests:
+          - unique
+          - not_null
+      - name: docket_id
+        description: "Foreign key to the parent Docket"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_dockets')
+              field: docket_id
+      - name: posted_date
+        description: "Date the document was posted"
+        tests:
+          - not_null
+
+  - name: stg_comments
+    description: "Staging model for Public Comments from Regulations.gov"
+    columns:
+      - name: comment_id
+        description: "Primary key for the comment"
+        tests:
+          - unique
+          - not_null
+      - name: document_id
+        description: "Foreign key to the Document being commented on"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_documents')
+              field: document_id
+      - name: docket_id
+        description: "Foreign key to the Docket"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_dockets')
+              field: docket_id
