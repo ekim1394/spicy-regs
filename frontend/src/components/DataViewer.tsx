@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { RegulationData, DataType } from '@/lib/api';
 import { CommentCard } from './data-viewer/CommentCard';
 import { DocketOrDocumentCard } from './data-viewer/DocketOrDocumentCard';
@@ -25,6 +25,12 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(0);
+
+  // Use a ref for bookmarks to keep handleToggleBookmark stable
+  const bookmarksRef = useRef(bookmarks);
+  useEffect(() => {
+    bookmarksRef.current = bookmarks;
+  }, [bookmarks]);
   
   const { getData, getDataCount } = useMotherDuckService();
 
@@ -45,17 +51,18 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
     fetchBookmarks();
   }, []);
 
-  const handleToggleBookmark = async (item: RegulationData) => {
+  const handleToggleBookmark = useCallback(async (item: RegulationData) => {
     const resourceId = dataType === 'comments' 
       ? (stripQuotes(item.comment_id) || item.docket_id)
       : item.docket_id;
 
     if (!resourceId) return;
 
-    const isBookmarked = bookmarks.has(resourceId);
+    const currentBookmarks = bookmarksRef.current;
+    const isBookmarked = currentBookmarks.has(resourceId);
     
     // Optimistic update
-    const newBookmarks = new Set(bookmarks);
+    const newBookmarks = new Set(currentBookmarks);
     if (isBookmarked) {
       newBookmarks.delete(resourceId);
     } else {
@@ -85,9 +92,10 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
       }
     } catch (e) {
       console.error("Failed to toggle bookmark", e);
-      setBookmarks(bookmarks);
+      // Revert to the state before optimistic update
+      setBookmarks(currentBookmarks);
     }
-  };
+  }, [dataType, agencyCode]);
 
   // Reset data when filters change
   useEffect(() => {
@@ -246,7 +254,7 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
           data={uniqueData}
           endReached={loadMore}
           overscan={200}
-          itemContent={(index, item) => {
+          itemContent={useCallback((index, item) => {
             const key = dataType === 'comments' 
               ? (stripQuotes(item.comment_id) || item.docket_id)
               : item.docket_id;
@@ -260,7 +268,7 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
                       key={`${key}-${index}`} 
                       item={item} 
                       isBookmarked={isBookmarked}
-                      onToggleBookmark={() => handleToggleBookmark(item)}
+                      onToggleBookmark={handleToggleBookmark}
                   />
                 ) : (
                   <DocketOrDocumentCard 
@@ -268,12 +276,12 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
                       item={item} 
                       dataType={dataType}
                       isBookmarked={isBookmarked}
-                      onToggleBookmark={() => handleToggleBookmark(item)}
+                      onToggleBookmark={handleToggleBookmark}
                   />
                 )}
               </div>
             );
-          }}
+          }, [dataType, bookmarks, handleToggleBookmark])}
           components={{
             Footer: () => {
               if (loadingMore) {
