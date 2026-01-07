@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import DOMPurify from 'isomorphic-dompurify';
 import { RegulationData } from '@/lib/api';
 import { useCopilotReadable } from "@copilotkit/react-core";
 import { stripQuotes, formatDate, parseRawJson } from './utils';
@@ -117,7 +118,7 @@ export function CommentCard({ item, isBookmarked, onToggleBookmark }: CommentCar
           <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
             <div 
               className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none"
-              dangerouslySetInnerHTML={{ __html: commentText }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(commentText) }}
             />
           </div>
         )}
