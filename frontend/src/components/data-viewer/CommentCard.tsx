@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { RegulationData } from '@/lib/api';
 import { useCopilotReadable } from "@copilotkit/react-core";
 import { stripQuotes, formatDate, parseRawJson } from './utils';
@@ -28,40 +28,81 @@ interface CommentCardProps {
 
 export function CommentCard({ item, isBookmarked, onToggleBookmark }: CommentCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const parsedJson = parseRawJson(item.raw_json);
-  const attributes = parsedJson?.data?.attributes || parsedJson?.attributes || (parsedJson && !parsedJson.data ? parsedJson : {});
-  const included = parsedJson?.included || [];
 
-  const commentId = stripQuotes(item.comment_id) || attributes.id || item.docket_id;
-  const title = stripQuotes(item.title) || attributes.title || 'Untitled Comment';
-  const commentText = stripQuotes(item.comment) || attributes.comment || '';
-  const documentType = stripQuotes(item.document_type) || attributes.documentType || '';
-  const subtype = stripQuotes(item.subtype) || attributes.subtype || '';
-  
-  // Submitter info
-  const firstName = attributes.firstName;
-  const lastName = attributes.lastName;
-  const organization = attributes.organization || item.organization;
-  const submitterName = firstName && lastName 
-    ? `${firstName} ${lastName}` 
-    : firstName || lastName || organization || 'Anonymous';
-  
-  // Dates
-  const postedDate = attributes.postedDate || item.posted_date;
-  const receiveDate = attributes.receiveDate || item.receive_date;
-  const modifyDate = attributes.modifyDate || item.modify_date;
-  
-  // Other metadata
-  const trackingNbr = attributes.trackingNbr;
-  const commentOnDocumentId = attributes.commentOnDocumentId;
-  const pageCount = attributes.pageCount;
-  
-  // Attachments
-  const attachments = included.filter((item: any) => item.type === 'attachments');
+  // Memoize parsing and attribute extraction to prevent expensive re-calculation on every render
+  const {
+    attributes,
+    included,
+    commentId,
+    title,
+    commentText,
+    documentType,
+    subtype,
+    submitterName,
+    postedDate,
+    receiveDate,
+    modifyDate,
+    trackingNbr,
+    commentOnDocumentId,
+    pageCount,
+    attachments
+  } = useMemo(() => {
+    const parsedJson = parseRawJson(item.raw_json);
+    const attrs = parsedJson?.data?.attributes || parsedJson?.attributes || (parsedJson && !parsedJson.data ? parsedJson : {});
+    const incl = parsedJson?.included || [];
+
+    const cId = stripQuotes(item.comment_id) || attrs.id || item.docket_id;
+    const t = stripQuotes(item.title) || attrs.title || 'Untitled Comment';
+    const cText = stripQuotes(item.comment) || attrs.comment || '';
+    const dType = stripQuotes(item.document_type) || attrs.documentType || '';
+    const sType = stripQuotes(item.subtype) || attrs.subtype || '';
+
+    // Submitter info
+    const firstName = attrs.firstName;
+    const lastName = attrs.lastName;
+    const organization = attrs.organization || item.organization;
+    const sName = firstName && lastName
+      ? `${firstName} ${lastName}`
+      : firstName || lastName || organization || 'Anonymous';
+
+    // Dates
+    const pDate = attrs.postedDate || item.posted_date;
+    const rDate = attrs.receiveDate || item.receive_date;
+    const mDate = attrs.modifyDate || item.modify_date;
+
+    // Other metadata
+    const tNbr = attrs.trackingNbr;
+    const cOnDocId = attrs.commentOnDocumentId;
+    const pCount = attrs.pageCount;
+
+    // Attachments
+    const atts = incl.filter((i: any) => i.type === 'attachments');
+
+    return {
+      attributes: attrs,
+      included: incl,
+      commentId: cId,
+      title: t,
+      commentText: cText,
+      documentType: dType,
+      subtype: sType,
+      submitterName: sName,
+      postedDate: pDate,
+      receiveDate: rDate,
+      modifyDate: mDate,
+      trackingNbr: tNbr,
+      commentOnDocumentId: cOnDocId,
+      pageCount: pCount,
+      attachments: atts
+    };
+  }, [item.raw_json, item.comment_id, item.docket_id, item.title, item.comment, item.document_type, item.subtype, item.organization, item.posted_date, item.receive_date, item.modify_date]);
+
+  // Memoize safe JSON for Copilot to avoid recursive walking on every render
+  const safeItem = useMemo(() => toJsonSafe(item), [item]);
 
   useCopilotReadable({
     description: `A public comment on a federal regulation. Title: ${title}. Comment Text: ${commentText}. Submitter: ${submitterName}. Posted Date: ${postedDate}.`,
-    value: toJsonSafe(item)  // Convert BigInt values to avoid serialization error
+    value: safeItem  // Convert BigInt values to avoid serialization error
   });
 
   return (

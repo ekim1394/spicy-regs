@@ -1,0 +1,3 @@
+## 2024-02-14 - [Memoizing Expensive Parsing in Virtualized Lists]
+**Learning:** Virtualized lists (`react-virtuoso`) re-render items frequently during scrolling or parent updates. If items perform expensive operations (like `JSON.parse` or recursive object traversal) directly in the render body, it can cause frame drops and increase garbage collection pressure.
+**Action:** Always wrap expensive synchronous operations (parsing, transformation, recursion) in `useMemo` within list item components. For referential stability of objects passed to hooks (like `useCopilotReadable`), use `useMemo` as well.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { RegulationData, DataType } from '@/lib/api';
 import { useCopilotReadable } from "@copilotkit/react-core";
 import { stripQuotes, formatDate, parseRawJson } from './utils';
@@ -34,52 +34,110 @@ export function DocketOrDocumentCard({
   onToggleBookmark
 }: DocketOrDocumentCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const parsedJson = parseRawJson(item.raw_json);
-  const attributes = parsedJson?.data?.attributes || parsedJson?.attributes || (parsedJson && !parsedJson.data ? parsedJson : {});
-  const relationships = parsedJson?.data?.relationships || {};
-  const included = parsedJson?.included || [];
 
-  const title = stripQuotes(item.title) || attributes.title || '';
-  const docketType = stripQuotes(item.docket_type) || attributes.docketType || '';
-  const documentType = attributes.documentType || '';
-  const docketId = item.docket_id;
-  const year = item.year;
-  const agencyCode = item.agency_code;
+  const {
+    attributes,
+    title,
+    docketType,
+    documentType,
+    docketId,
+    year,
+    agencyCode,
+    abstract,
+    rin,
+    modifyDate,
+    keywords,
+    program,
+    effectiveDate,
+    subject,
+    postedDate,
+    commentStartDate,
+    commentEndDate,
+    openForComment,
+    withinCommentPeriod,
+    frDocNum,
+    frVolNum,
+    pageCount,
+    fileFormats,
+    attachments
+  } = useMemo(() => {
+    const parsedJson = parseRawJson(item.raw_json);
+    const attrs = parsedJson?.data?.attributes || parsedJson?.attributes || (parsedJson && !parsedJson.data ? parsedJson : {});
+    const relationships = parsedJson?.data?.relationships || {};
+    const included = parsedJson?.included || [];
 
-  // Common fields
-  const abstract = attributes.dkAbstract || attributes.docAbstract || '';
-  const rin = attributes.rin;
-  const modifyDate = attributes.modifyDate || item.modify_date;
-  const keywords = attributes.keywords;
-  const program = attributes.program;
-  const effectiveDate = attributes.effectiveDate;
+    const t = stripQuotes(item.title) || attrs.title || '';
+    const dkType = stripQuotes(item.docket_type) || attrs.docketType || '';
+    const docType = attrs.documentType || '';
+    const dId = item.docket_id;
+    const y = item.year;
+    const aCode = item.agency_code;
 
-  // Document-specific fields
-  const subject = attributes.subject;
-  const postedDate = attributes.postedDate;
-  const commentStartDate = attributes.commentStartDate;
-  const commentEndDate = attributes.commentEndDate;
-  const openForComment = attributes.openForComment;
-  const withinCommentPeriod = attributes.withinCommentPeriod;
-  const frDocNum = attributes.frDocNum;
-  const frVolNum = attributes.frVolNum;
-  const pageCount = attributes.pageCount;
-  
-  // File formats for documents
-  const fileFormats = attributes.fileFormats || [];
-  
-  // Attachments (from relationships/included)
-  const attachments = (relationships.attachments?.data || [])
-    .map((attachmentRef: { id: string }) =>
-      included.find((inc: any) => inc.id === attachmentRef.id && inc.type === 'attachments')
-    )
-    .filter(Boolean);
+    // Common fields
+    const abs = attrs.dkAbstract || attrs.docAbstract || '';
+    const r = attrs.rin;
+    const mDate = attrs.modifyDate || item.modify_date;
+    const k = attrs.keywords;
+    const p = attrs.program;
+    const eDate = attrs.effectiveDate;
+
+    // Document-specific fields
+    const sub = attrs.subject;
+    const pDate = attrs.postedDate;
+    const cStartDate = attrs.commentStartDate;
+    const cEndDate = attrs.commentEndDate;
+    const openForC = attrs.openForComment;
+    const withinCommentP = attrs.withinCommentPeriod;
+    const frDocN = attrs.frDocNum;
+    const frVolN = attrs.frVolNum;
+    const pCount = attrs.pageCount;
+
+    // File formats for documents
+    const fFormats = attrs.fileFormats || [];
+
+    // Attachments (from relationships/included)
+    const atts = (relationships.attachments?.data || [])
+      .map((attachmentRef: { id: string }) =>
+        included.find((inc: any) => inc.id === attachmentRef.id && inc.type === 'attachments')
+      )
+      .filter(Boolean);
+
+    return {
+      attributes: attrs,
+      title: t,
+      docketType: dkType,
+      documentType: docType,
+      docketId: dId,
+      year: y,
+      agencyCode: aCode,
+      abstract: abs,
+      rin: r,
+      modifyDate: mDate,
+      keywords: k,
+      program: p,
+      effectiveDate: eDate,
+      subject: sub,
+      postedDate: pDate,
+      commentStartDate: cStartDate,
+      commentEndDate: cEndDate,
+      openForComment: openForC,
+      withinCommentPeriod: withinCommentP,
+      frDocNum: frDocN,
+      frVolNum: frVolN,
+      pageCount: pCount,
+      fileFormats: fFormats,
+      attachments: atts
+    };
+  }, [item.raw_json, item.title, item.docket_type, item.docket_id, item.year, item.agency_code, item.modify_date]);
 
   const isDocument = dataType === 'documents';
 
+  // Memoize safe JSON for Copilot
+  const safeItem = useMemo(() => toJsonSafe(item), [item]);
+
   useCopilotReadable({
     description: `A federal regulation ${isDocument ? 'document' : 'docket'}. Title: ${title}. Abstract: ${abstract}. Agency: ${agencyCode}.`,
-    value: toJsonSafe(item)  // Convert BigInt values to avoid serialization error
+    value: safeItem  // Convert BigInt values to avoid serialization error
   });
 
   return (
