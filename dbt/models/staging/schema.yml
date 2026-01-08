@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: stg_dockets
+    description: "Staging model for dockets"
+    columns:
+      - name: docket_id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
