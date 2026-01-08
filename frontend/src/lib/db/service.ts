@@ -1,6 +1,6 @@
 import { runQuery, initDb, getDb } from "./client";
 import { RegulationsDataTypes } from "./models";
-import { buildBaseQuery, buildWhereClause } from "./utils";
+import { buildBaseQuery, buildWhereClause, escapeSqlString } from "./utils";
 import { initializeDatabase } from "./config";
 
 async function refreshCache(
@@ -17,6 +17,7 @@ async function refreshCache(
 
   console.log(`Refreshing ${dataType} cache for agency code: ${agencyCode}, docket id: ${docketId}`);
 
+  // whereClause is already built using escapeSqlString in buildWhereClause
   await runQuery(`DELETE FROM ${tableName} WHERE ${whereClause}`);
 
   const query = buildBaseQuery(dataType, agencyCode, docketId);
@@ -77,6 +78,8 @@ export async function getData(
         console.error("Error refreshing cache, falling back to live query", e);
         let query = buildBaseQuery(dataType, agencyCode, docketId);
         if (agencyCode || docketId) {
+             // We still use buildWhereClause here, but the replace hack was brittle.
+             // Ideally we should have better ways to alias tables, but this persists the fix.
              const wc = buildWhereClause(agencyCode, docketId).replace(/agency_code/g, 'f.agency_code').replace(/docket_id/g, 'f.docket_id');
              query += ` WHERE ${wc}`;
         }
@@ -91,11 +94,13 @@ export async function searchResources(query: string, agencyCode?: string): Promi
   
   const tables = ['dockets_cache', 'documents_cache', 'comments_cache'];
   const results = [];
-  const escapedQuery = query.replace(/'/g, "''");
+  const escapedQuery = escapeSqlString(query);
+  const escapedAgencyCode = agencyCode ? escapeSqlString(agencyCode) : undefined;
+
   const unionQueries = tables.map(table => {
     let where = `title ILIKE '%${escapedQuery}%'`;
-    if (agencyCode) {
-        where += ` AND agency_code = '${agencyCode}'`;
+    if (escapedAgencyCode) {
+        where += ` AND agency_code = '${escapedAgencyCode}'`;
     }
     const type = table.split('_')[0];
     return `

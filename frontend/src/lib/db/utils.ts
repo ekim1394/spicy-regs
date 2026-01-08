@@ -1,6 +1,25 @@
 import { FIELD_MAPPINGS } from "./constants";
 import { RegulationsDataTypes } from "./models";
 
+/**
+ * Escapes a string for use in a SQL query by doubling single quotes.
+ * This prevents SQL injection attacks when interpolating strings into SQL.
+ */
+export function escapeSqlString(str: string): string {
+  if (!str) return str;
+  return str.replace(/'/g, "''");
+}
+
+/**
+ * Sanitizes a string for use in a file path or URL segment.
+ * Allows only alphanumeric characters, hyphens, and underscores.
+ * Prevents path traversal and injection into S3 paths.
+ */
+export function sanitizePathSegment(str: string): string {
+  if (!str) return "";
+  return str.replace(/[^a-zA-Z0-9\-_]/g, "");
+}
+
 export function buildBaseQuery(
   dataType: RegulationsDataTypes,
   agencyCode?: string,
@@ -9,11 +28,15 @@ export function buildBaseQuery(
   const mapping = FIELD_MAPPINGS[dataType];
   const fields = mapping.fields.join(",\n        ");
 
+  // Sanitize inputs for path construction to prevent path traversal or invalid paths
+  const safeAgencyCode = agencyCode ? sanitizePathSegment(agencyCode) : undefined;
+  const safeDocketId = docketId ? sanitizePathSegment(docketId) : undefined;
+
   let path = "";
-  if (agencyCode && docketId) {
-    path = `s3://mirrulations/raw-data/${agencyCode}/${docketId}/text-${docketId}/${mapping.path_pattern}`;
-  } else if (agencyCode) {
-    path = `s3://mirrulations/raw-data/${agencyCode}/*/*/${mapping.path_pattern}`;
+  if (safeAgencyCode && safeDocketId) {
+    path = `s3://mirrulations/raw-data/${safeAgencyCode}/${safeDocketId}/text-${safeDocketId}/${mapping.path_pattern}`;
+  } else if (safeAgencyCode) {
+    path = `s3://mirrulations/raw-data/${safeAgencyCode}/*/*/${mapping.path_pattern}`;
   } else {
     path = `s3://mirrulations/raw-data/*/*/${mapping.path_pattern}`;
   }
@@ -40,10 +63,12 @@ export function buildBaseQuery(
 export function buildWhereClause(agencyCode?: string, docketId?: string): string {
   const whereClause: string[] = [];
   if (agencyCode) {
-    whereClause.push(`agency_code = '${agencyCode.toUpperCase()}'`);
+    const escapedAgency = escapeSqlString(agencyCode.toUpperCase());
+    whereClause.push(`agency_code = '${escapedAgency}'`);
   }
   if (docketId) {
-    whereClause.push(`docket_id = '${docketId.toUpperCase()}'`);
+    const escapedDocket = escapeSqlString(docketId.toUpperCase());
+    whereClause.push(`docket_id = '${escapedDocket}'`);
   }
   
   if (whereClause.length === 0) {
