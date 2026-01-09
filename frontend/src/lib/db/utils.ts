@@ -1,6 +1,14 @@
 import { FIELD_MAPPINGS } from "./constants";
 import { RegulationsDataTypes } from "./models";
 
+export function escapeSqlString(input: string): string {
+  return input.replace(/'/g, "''");
+}
+
+export function sanitizePathSegment(input: string): string {
+  return input.replace(/[^a-zA-Z0-9_-]/g, "");
+}
+
 export function buildBaseQuery(
   dataType: RegulationsDataTypes,
   agencyCode?: string,
@@ -11,9 +19,12 @@ export function buildBaseQuery(
 
   let path = "";
   if (agencyCode && docketId) {
-    path = `s3://mirrulations/raw-data/${agencyCode}/${docketId}/text-${docketId}/${mapping.path_pattern}`;
+    const safeAgency = sanitizePathSegment(agencyCode);
+    const safeDocket = sanitizePathSegment(docketId);
+    path = `s3://mirrulations/raw-data/${safeAgency}/${safeDocket}/text-${safeDocket}/${mapping.path_pattern}`;
   } else if (agencyCode) {
-    path = `s3://mirrulations/raw-data/${agencyCode}/*/*/${mapping.path_pattern}`;
+    const safeAgency = sanitizePathSegment(agencyCode);
+    path = `s3://mirrulations/raw-data/${safeAgency}/*/*/${mapping.path_pattern}`;
   } else {
     path = `s3://mirrulations/raw-data/*/*/${mapping.path_pattern}`;
   }
@@ -40,10 +51,12 @@ export function buildBaseQuery(
 export function buildWhereClause(agencyCode?: string, docketId?: string): string {
   const whereClause: string[] = [];
   if (agencyCode) {
-    whereClause.push(`agency_code = '${agencyCode.toUpperCase()}'`);
+    const safeAgency = escapeSqlString(agencyCode.toUpperCase());
+    whereClause.push(`agency_code = '${safeAgency}'`);
   }
   if (docketId) {
-    whereClause.push(`docket_id = '${docketId.toUpperCase()}'`);
+    const safeDocket = escapeSqlString(docketId.toUpperCase());
+    whereClause.push(`docket_id = '${safeDocket}'`);
   }
   
   if (whereClause.length === 0) {
