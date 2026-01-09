@@ -1,6 +1,25 @@
 import { FIELD_MAPPINGS } from "./constants";
 import { RegulationsDataTypes } from "./models";
 
+/**
+ * Escapes a string for use in a SQL query.
+ * Replaces single quotes with two single quotes.
+ */
+export function escapeSqlString(str: string): string {
+  if (typeof str !== "string") return str;
+  return str.replace(/'/g, "''");
+}
+
+/**
+ * Sanitizes a string for use in a file path/URL.
+ * Allows only alphanumeric characters, hyphens, and underscores.
+ */
+export function sanitizePathSegment(segment: string): string {
+  if (!segment) return "";
+  // Remove any characters that aren't alphanumeric, hyphens, or underscores
+  return segment.replace(/[^a-zA-Z0-9\-_]/g, "");
+}
+
 export function buildBaseQuery(
   dataType: RegulationsDataTypes,
   agencyCode?: string,
@@ -11,9 +30,12 @@ export function buildBaseQuery(
 
   let path = "";
   if (agencyCode && docketId) {
-    path = `s3://mirrulations/raw-data/${agencyCode}/${docketId}/text-${docketId}/${mapping.path_pattern}`;
+    const safeAgency = sanitizePathSegment(agencyCode);
+    const safeDocket = sanitizePathSegment(docketId);
+    path = `s3://mirrulations/raw-data/${safeAgency}/${safeDocket}/text-${safeDocket}/${mapping.path_pattern}`;
   } else if (agencyCode) {
-    path = `s3://mirrulations/raw-data/${agencyCode}/*/*/${mapping.path_pattern}`;
+    const safeAgency = sanitizePathSegment(agencyCode);
+    path = `s3://mirrulations/raw-data/${safeAgency}/*/*/${mapping.path_pattern}`;
   } else {
     path = `s3://mirrulations/raw-data/*/*/${mapping.path_pattern}`;
   }
@@ -40,10 +62,10 @@ export function buildBaseQuery(
 export function buildWhereClause(agencyCode?: string, docketId?: string): string {
   const whereClause: string[] = [];
   if (agencyCode) {
-    whereClause.push(`agency_code = '${agencyCode.toUpperCase()}'`);
+    whereClause.push(`agency_code = '${escapeSqlString(agencyCode).toUpperCase()}'`);
   }
   if (docketId) {
-    whereClause.push(`docket_id = '${docketId.toUpperCase()}'`);
+    whereClause.push(`docket_id = '${escapeSqlString(docketId).toUpperCase()}'`);
   }
   
   if (whereClause.length === 0) {
