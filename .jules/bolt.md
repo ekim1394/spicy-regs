@@ -1,0 +1,3 @@
+## 2024-03-24 - [Virtuoso Item Re-renders]
+**Learning:** `Virtuoso`'s `itemContent` prop is called for *every* item when the `DataViewer` component re-renders if it is not referentially stable. Even if it is stable, if it closes over changing state (like `bookmarks`), it must be recreated. Using `context` prop allows passing changing data without recreating `itemContent`, and passing a stable handler (via `useRef` for state access) prevents child components from re-rendering unnecessarily.
+**Action:** When using `react-virtuoso` with dynamic per-item state (like bookmarks/selection) that affects the whole list, always use the `context` prop to pass the dynamic data and keep `itemContent` stable. Ensure child item components are `memo`ized and receive stable callbacks.

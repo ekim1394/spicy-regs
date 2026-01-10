@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { RegulationData, DataType } from '@/lib/api';
 import { CommentCard } from './data-viewer/CommentCard';
 import { DocketOrDocumentCard } from './data-viewer/DocketOrDocumentCard';
@@ -26,6 +26,8 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(0);
   
+  const bookmarksRef = useRef(bookmarks);
+
   const { getData, getDataCount } = useMotherDuckService();
 
   // Fetch bookmarks
@@ -45,17 +47,24 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
     fetchBookmarks();
   }, []);
 
-  const handleToggleBookmark = async (item: RegulationData) => {
+  // Update ref when bookmarks change
+  useEffect(() => {
+    bookmarksRef.current = bookmarks;
+  }, [bookmarks]);
+
+  const handleToggleBookmark = useCallback(async (item: RegulationData) => {
     const resourceId = dataType === 'comments' 
       ? (stripQuotes(item.comment_id) || item.docket_id)
       : item.docket_id;
 
     if (!resourceId) return;
 
-    const isBookmarked = bookmarks.has(resourceId);
+    // Use ref to check current status without creating dependency
+    const currentBookmarks = bookmarksRef.current;
+    const isBookmarked = currentBookmarks.has(resourceId);
     
     // Optimistic update
-    const newBookmarks = new Set(bookmarks);
+    const newBookmarks = new Set(currentBookmarks);
     if (isBookmarked) {
       newBookmarks.delete(resourceId);
     } else {
@@ -85,9 +94,23 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
       }
     } catch (e) {
       console.error("Failed to toggle bookmark", e);
-      setBookmarks(bookmarks);
+      // Revert on error using the ref to be safe (or just currentBookmarks which was valid at start of fn)
+      // Ideally we would want to restore to what it was.
+      // Since we are inside the callback, we know what it was (isBookmarked).
+      // But if user clicked multiple times fast...
+      // For now, restoring to `bookmarks` state before optimistic update is tricky if multiple updates happened.
+      // But usually this simple revert is acceptable for simple toggle.
+      setBookmarks(prev => {
+         const reverted = new Set(prev);
+         if (isBookmarked) {
+            reverted.add(resourceId);
+         } else {
+            reverted.delete(resourceId);
+         }
+         return reverted;
+      });
     }
-  };
+  }, [agencyCode, dataType]); // removed bookmarks dependency
 
   // Reset data when filters change
   useEffect(() => {
@@ -181,6 +204,44 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
     return Array.from(dataMap.values());
   }, [data, dataType]);
 
+  // Virtuoso Context
+  const contextValue = useMemo(() => ({
+    bookmarks,
+    onToggleBookmark: handleToggleBookmark
+  }), [bookmarks, handleToggleBookmark]);
+
+  // Virtuoso Item Content
+  const itemContent = useCallback((index: number, item: RegulationData, context: any) => {
+    const { bookmarks, onToggleBookmark } = context;
+    const key = dataType === 'comments'
+      ? (stripQuotes(item.comment_id) || item.docket_id)
+      : item.docket_id;
+
+    const isBookmarked = bookmarks.has(key);
+
+    return (
+      <div className="pb-4">
+        {dataType === 'comments' ? (
+          <CommentCard
+              key={`${key}-${index}`}
+              item={item}
+              isBookmarked={isBookmarked}
+              onToggleBookmark={onToggleBookmark}
+          />
+        ) : (
+          <DocketOrDocumentCard
+              key={`${key}-${index}`}
+              item={item}
+              dataType={dataType}
+              isBookmarked={isBookmarked}
+              onToggleBookmark={onToggleBookmark}
+          />
+        )}
+      </div>
+    );
+  }, [dataType]);
+
+
   if (!agencyCode) {
     return (
       <div className="p-8 text-center text-gray-500 dark:text-gray-400">
@@ -246,34 +307,8 @@ export function DataViewer({ agencyCode, dataType, docketId }: DataViewerProps) 
           data={uniqueData}
           endReached={loadMore}
           overscan={200}
-          itemContent={(index, item) => {
-            const key = dataType === 'comments' 
-              ? (stripQuotes(item.comment_id) || item.docket_id)
-              : item.docket_id;
-            
-            const isBookmarked = bookmarks.has(key);
-
-            return (
-              <div className="pb-4">
-                {dataType === 'comments' ? (
-                  <CommentCard 
-                      key={`${key}-${index}`} 
-                      item={item} 
-                      isBookmarked={isBookmarked}
-                      onToggleBookmark={() => handleToggleBookmark(item)}
-                  />
-                ) : (
-                  <DocketOrDocumentCard 
-                      key={`${key}-${index}`} 
-                      item={item} 
-                      dataType={dataType}
-                      isBookmarked={isBookmarked}
-                      onToggleBookmark={() => handleToggleBookmark(item)}
-                  />
-                )}
-              </div>
-            );
-          }}
+          context={contextValue}
+          itemContent={itemContent}
           components={{
             Footer: () => {
               if (loadingMore) {
