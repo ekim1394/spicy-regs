@@ -1,0 +1,3 @@
+# Testudo's Journal
+
+## 2024-05-22 - [SQL Injection Vulnerability in Query Builders] **Issue:** `buildWhereClause` and `buildBaseQuery` in `utils.ts` construct SQL/Path strings using direct template literals without sanitization, allowing for potential SQL injection or path traversal if user inputs (e.g., from URL params) are passed directly. **Learning:** Helper functions that generate queries must include input sanitization or validation, even if they seem internal, as they are often the last line of defense before database execution. **Action:** Implement `escapeSqlString` and `sanitizePathSegment` utilities and use them in the query builders, verifying with unit tests that inject malicious strings.
