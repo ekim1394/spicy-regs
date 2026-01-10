@@ -1,0 +1,58 @@
+
+version: 2
+
+models:
+  - name: stg_dockets
+    description: "Staging model for dockets"
+    columns:
+      - name: docket_id
+        description: "Primary key for dockets"
+        tests:
+          - unique
+          - not_null
+      - name: agency_id
+        description: "Agency identifier"
+        tests:
+          - not_null
+      - name: title
+        description: "Title of the docket"
+        tests:
+          - not_null
+
+  - name: stg_documents
+    description: "Staging model for documents"
+    columns:
+      - name: document_id
+        description: "Primary key for documents"
+        tests:
+          - unique
+          - not_null
+      - name: docket_id
+        description: "Foreign key to dockets"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_dockets')
+              field: docket_id
+
+  - name: stg_comments
+    description: "Staging model for comments"
+    columns:
+      - name: comment_id
+        description: "Primary key for comments"
+        tests:
+          - unique
+          - not_null
+      - name: docket_id
+        description: "Foreign key to dockets"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_dockets')
+              field: docket_id
+      - name: document_id
+        description: "Foreign key to documents"
+        tests:
+          - relationships:
+              to: ref('stg_documents')
+              field: document_id

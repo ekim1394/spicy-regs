@@ -1,0 +1,21 @@
+
+with source as (
+    select * from read_json_auto('{{ var('data_path') }}/comment-*.json')
+),
+renamed as (
+    select
+        data.id as comment_id,
+        data.attributes.docketId as docket_id,
+        data.attributes.commentOnDocumentId as document_id,
+        data.attributes.agencyId as agency_id,
+        data.attributes.title as title,
+        data.attributes.comment as comment_text,
+        try_cast(data.attributes.postedDate as timestamp) as posted_date,
+        try_cast(data.attributes.receiveDate as timestamp) as received_date,
+        try_cast(data.attributes.modifyDate as timestamp) as last_modified_date,
+        data.attributes.organization as organization,
+        data.attributes.subtype as subtype,
+        data.attributes.objectId as object_id
+    from source
+)
+select * from renamed
