@@ -1,0 +1,3 @@
+## 2026-01-11 - [Native Search Input Inconsistencies]
+**Learning:** Native `type="search"` inputs have built-in "clear" buttons (the "x") in WebKit-based browsers (Chrome, Edge, Safari) but not in Firefox. This creates an inconsistent experience where some users see two clear buttons (if a custom one is added) or none (if relying on native).
+**Action:** When implementing search bars, explicitly hide the native cancel button using `[&::-webkit-search-cancel-button]:hidden` (Tailwind) or CSS equivalent, and implement a custom "Clear" button to ensure a consistent, accessible experience across all browsers.
