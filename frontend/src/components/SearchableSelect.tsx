@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, memo } from 'react';
 
 interface SearchableSelectProps {
   options: string[];
@@ -12,7 +12,7 @@ interface SearchableSelectProps {
   disabled?: boolean;
 }
 
-export function SearchableSelect({
+export const SearchableSelect = memo(function SearchableSelect({
   options,
   value,
   onChange,
@@ -26,9 +26,10 @@ export function SearchableSelect({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Filter options based on search term
-  const filteredOptions = options.filter((option) =>
+  // Optimization: Memoize filtering to prevent O(N) operation on every render
+  const filteredOptions = useMemo(() => options.filter((option) =>
     option.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ), [options, searchTerm]);
 
   // Update effect to sync search term when value changes externally (or initial load)
   useEffect(() => {
@@ -142,4 +143,4 @@ export function SearchableSelect({
       </div>
     </div>
   );
-}
+});
