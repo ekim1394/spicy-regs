@@ -1,0 +1,4 @@
+## 2024-03-24 - [SQL Injection Fix]
+**Vulnerability:** Found direct interpolation of user inputs (`agencyCode`, `docketId`) into SQL strings in `buildWhereClause` and `searchResources` (for `agencyCode`). Even though `toUpperCase()` was used, it doesn't escape single quotes, allowing for SQL injection.
+**Learning:** `toUpperCase()` is not a sanitizer. Manual SQL string construction using template literals is prone to errors. DuckDB Wasm via `@duckdb/duckdb-wasm` in this context doesn't support parameterized queries easily for all query types (or at least the wrapper didn't use them).
+**Prevention:** Created a centralized `escapeSqlString` utility that doubles single quotes (standard SQL escaping). Applied this utility to all user inputs before interpolation. Added unit tests to ensure `escapeSqlString` works as expected and `buildWhereClause` uses it.
