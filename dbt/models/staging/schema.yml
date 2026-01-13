@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: stg_dockets
+    description: "Staging model for dockets data from raw JSON files."
+    columns:
+      - name: docket_id
+        description: "Primary key for the docket."
+        tests:
+          - unique
+          - not_null
+      - name: agency_id
+        description: "The agency identifier associated with the docket."
+      - name: title
+        description: "The title of the docket."
+      - name: docket_type
+        description: "The type of the docket (e.g., Rulemaking, Nonrulemaking)."
+      - name: last_modified_date
+        description: "The date the docket was last modified."

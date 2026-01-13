@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: dim_dockets
+    description: "Dimension table for dockets."
+    columns:
+      - name: docket_key
+        description: "Surrogate key for the docket."
+        tests:
+          - unique
+          - not_null
+      - name: docket_id
+        description: "Natural key for the docket."
+        tests:
+          - unique
+          - not_null
