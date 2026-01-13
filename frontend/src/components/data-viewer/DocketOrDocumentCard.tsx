@@ -1,40 +1,25 @@
-import { useState } from 'react';
+import { useState, memo, useMemo, useCallback } from 'react';
 import { RegulationData, DataType } from '@/lib/api';
 import { useCopilotReadable } from "@copilotkit/react-core";
-import { stripQuotes, formatDate, parseRawJson } from './utils';
+import { stripQuotes, formatDate, parseRawJson, toJsonSafe } from './utils';
 import { BookmarkButton } from './BookmarkButton';
 import { ExplainButton } from './ExplainButton';
-
-// Helper to convert BigInt values to numbers for JSON serialization
-function toJsonSafe(obj: any): any {
-  if (obj === null || obj === undefined) return obj;
-  if (typeof obj === 'bigint') return Number(obj);
-  if (Array.isArray(obj)) return obj.map(toJsonSafe);
-  if (typeof obj === 'object') {
-    const result: any = {};
-    for (const [key, value] of Object.entries(obj)) {
-      result[key] = toJsonSafe(value);
-    }
-    return result;
-  }
-  return obj;
-}
 
 interface DocketOrDocumentCardProps {
   item: RegulationData;
   dataType: DataType;
   isBookmarked: boolean;
-  onToggleBookmark: () => void;
+  onToggleBookmark: (item: RegulationData) => void;
 }
 
-export function DocketOrDocumentCard({ 
+export const DocketOrDocumentCard = memo(function DocketOrDocumentCard({
   item, 
   dataType,
   isBookmarked,
   onToggleBookmark
 }: DocketOrDocumentCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const parsedJson = parseRawJson(item.raw_json);
+  const parsedJson = useMemo(() => parseRawJson(item.raw_json), [item.raw_json]);
   const attributes = parsedJson?.data?.attributes || parsedJson?.attributes || (parsedJson && !parsedJson.data ? parsedJson : {});
   const relationships = parsedJson?.data?.relationships || {};
   const included = parsedJson?.included || [];
@@ -77,10 +62,16 @@ export function DocketOrDocumentCard({
 
   const isDocument = dataType === 'documents';
 
+  const copilotValue = useMemo(() => toJsonSafe(item), [item]);
+
   useCopilotReadable({
     description: `A federal regulation ${isDocument ? 'document' : 'docket'}. Title: ${title}. Abstract: ${abstract}. Agency: ${agencyCode}.`,
-    value: toJsonSafe(item)  // Convert BigInt values to avoid serialization error
+    value: copilotValue
   });
+
+  const handleToggle = useCallback(() => {
+    onToggleBookmark(item);
+  }, [onToggleBookmark, item]);
 
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-lg transition-all duration-200">
@@ -93,7 +84,7 @@ export function DocketOrDocumentCard({
             </h3>
             <BookmarkButton 
               isBookmarked={isBookmarked} 
-              onToggle={onToggleBookmark} 
+              onToggle={handleToggle}
               loading={false} 
             />
             <ExplainButton itemTitle={title || docketId} dataType={isDocument ? 'document' : 'docket'} />
@@ -317,4 +308,4 @@ export function DocketOrDocumentCard({
       </div>
     </div>
   );
-}
+});
